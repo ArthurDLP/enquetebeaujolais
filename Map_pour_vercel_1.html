@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dessinez à l'aide de l'outil polygone la zone dans laquelle vous passez l'essentiel de votre quotidien.</title>
+
+    <!-- Inclure le CSS de Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+    <!-- Inclure le CSS de Leaflet Draw -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+
+    <style>
+        /* Taille de la carte */
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+
+        /* Style pour la chatbox */
+        #dialog {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border: 2px solid #333;
+            padding: 20px;
+            z-index: 1000;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        #dialog button {
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Dessinez à l'aide de l'outil polygone la zone dans laquelle vous passez l'essentiel de votre quotidien.</h1>
+
+    <!-- Section pour afficher l'identifiant unique -->
+    <p>
+        Votre identifiant unique est : 
+        <strong id="user-id"></strong>
+        <button onclick="copyToClipboard()">Copier</button>
+    </p>
+    
+    <div id="map"></div> <!-- Div où la carte sera rendue -->
+
+    <!-- Chatbox pour confirmer l'envoi des données -->
+    <div id="dialog">
+        <p>Souhaitez-vous envoyer les données de la zone dessinée au serveur ou annuler le dessin ?</p>
+        <button id="send-btn">Envoyer</button>
+        <button id="cancel-btn">Annuler</button>
+    </div>
+
+    <!-- Inclure le JS de Leaflet -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <!-- Inclure le JS de Leaflet Draw -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+    <!-- Inclure la bibliothèque Proj4js pour la conversion de coordonnées -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.7.5/proj4.js"></script>
+
+    <script>
+        // Fonction pour générer un identifiant unique (UUID)
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Afficher l'UUID sur la page
+        var userId = generateUUID();
+        document.getElementById('user-id').textContent = userId;
+
+        // Fonction pour copier l'UUID dans le presse-papiers
+        function copyToClipboard() {
+            var textToCopy = document.getElementById('user-id').textContent;
+            navigator.clipboard.writeText(textToCopy).then(function() {
+                alert("Identifiant copié : " + textToCopy);
+            }, function(err) {
+                alert("Erreur lors de la copie de l'identifiant");
+            });
+        }
+
+        // Définir les systèmes de coordonnées Lambert 93 (EPSG:2154) et WGS 84 (EPSG:4326)
+        proj4.defs([
+            [
+                'EPSG:2154',
+                '+proj=lcc +lat_1=49.000000000 +lat_2=44.000000000 +lat_0=46.500000000 +lon_0=3.000000000 +x_0=700000.000 +y_0=6600000.000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'
+            ]
+        ]);
+
+        // Coordonnées Lambert 93 (EPSG:2154) que vous avez fournies
+        var lambert93Coords = [819212.9416999305, 6551101.534671542]; // [x, y]
+
+        // Conversion des coordonnées Lambert 93 en WGS 84 (EPSG:4326)
+        var wgs84Coords = proj4('EPSG:2154', 'EPSG:4326', lambert93Coords);
+
+        // Initialiser la carte Leaflet centrée sur les coordonnées converties (WGS 84)
+        var map = L.map('map').setView([wgs84Coords[1], wgs84Coords[0]], 10); // Zoom à 10 pour dézoomer
+
+        // Ajouter une couche de tuiles (par exemple OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // Initialiser le contrôle de dessin Leaflet.Draw
+        var drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+
+        var drawControl = new L.Control.Draw({
+            draw: {
+                polyline: false,
+                circle: false,
+                rectangle: false,
+                marker: false,
+                circlemarker: false,
+                polygon: {
+                    allowIntersection: false,
+                    shapeOptions: {
+                        color: '#bada55'
+                    }
+                }
+            },
+            edit: {
+                featureGroup: drawnItems
+            }
+        });
+        map.addControl(drawControl);
+
+        var geojsonData; // Stocker les données GeoJSON globalement
+
+        // Fonction pour envoyer les données au serveur
+        function sendGeoJSONToServer(geojsonData) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "https://votre-serveur.com/api/save-geojson", true); // Remplacez cette URL par votre endpoint
+            xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    alert("Données envoyées avec succès !");
+                } else if (xhr.readyState === 4) {
+                    alert("Erreur lors de l'envoi des données.");
+                }
+            };
+
+            xhr.send(JSON.stringify(geojsonData));
+        }
+
+        // Événement qui capture les formes dessinées
+        map.on(L.Draw.Event.CREATED, function (event) {
+            var layer = event.layer;
+            drawnItems.addLayer(layer);
+
+            // Exporter les données en GeoJSON et ajouter l'UUID dans les propriétés
+            geojsonData = layer.toGeoJSON();
+            geojsonData.properties = { userId: userId }; // Ajouter l'UUID dans les propriétés
+
+            console.log(JSON.stringify(geojsonData)); // Affiche les données GeoJSON avec l'UUID dans la console
+            
+            // Afficher la chatbox
+            document.getElementById('dialog').style.display = 'block';
+        });
+
+        // Gérer le clic sur le bouton Envoyer
+        document.getElementById('send-btn').addEventListener('click', function() {
+            document.getElementById('dialog').style.display = 'none'; // Masquer la chatbox
+            sendGeoJSONToServer(geojsonData); // Envoyer les données au serveur
+        });
+
+        // Gérer le clic sur le bouton Annuler
+        document.getElementById('cancel-btn').addEventListener('click', function() {
+            drawnItems.clearLayers(); // Effacer les dessins précédents
+            document.getElementById('dialog').style.display = 'none'; // Masquer la chatbox
+        });
+    </script>
+
+</body>
+</html>
