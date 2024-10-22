@@ -1,0 +1,39 @@
+// pages/api/upload.js
+
+import AWS from 'aws-sdk';
+
+// Configuration des accès à AWS S3
+const s3 = new AWS.S3({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION, // Région de votre bucket S3
+});
+
+export default async function handler(req, res) {
+    if (req.method === 'POST') {
+        const { geojsonData, userId } = req.body;
+
+        // Créer un nom de fichier unique (par exemple avec l'UUID)
+        const fileName = `${userId}-zone.geojson`;
+
+        const params = {
+            Bucket: process.env.S3_BUCKET_NAME,  // Nom du bucket S3
+            Key: fileName,
+            Body: JSON.stringify(geojsonData),
+            ContentType: 'application/json',
+        };
+
+        try {
+            // Envoyer les données vers S3
+            const uploadResult = await s3.upload(params).promise();
+            console.log('Upload réussi:', uploadResult);
+
+            res.status(200).json({ message: 'Upload réussi', url: uploadResult.Location });
+        } catch (error) {
+            console.error('Erreur lors du téléchargement sur S3:', error);
+            res.status(500).json({ error: 'Erreur lors du téléchargement' });
+        }
+    } else {
+        res.status(405).json({ error: 'Méthode non autorisée' });
+    }
+}
